@@ -162,6 +162,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="matrix.cpp" />
+    <ClCompile Include="matrix_ge.cpp" />
     <ClCompile Include="matrix_lu.cpp" />
     <ClCompile Include="matrix_qr.cpp" />
     <ClCompile Include="vector.cpp" />

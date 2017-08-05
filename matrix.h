@@ -33,6 +33,11 @@ namespace Math
 		template<typename T> static void qr_cpup(const T * a, T * Q, T * R, const int N);
 		template<typename T> static void qr_gpu(const T * a, T * Q, T * R, const int N);
 		template<typename T> static void qr_task(void * p);
+		template<typename T> static void ge_axb_cpu(T * a, T * b, int * p, const int N);
+		//template<typename T> static void lu_cpup(T * a, T * b, int * p, const int N);
+		//template<typename T> static void lu_gpu(T * a, T * b, int * p, const int N);
+		//template<typename T> static void lu_task(void * p);
+
 
 	public:
 		static MATHLIB_API void axb(const char * a, const char * b, char * c, const int ra, const int ca, const int cb, bool gpu = false);
@@ -51,6 +56,11 @@ namespace Math
 		static MATHLIB_API void qr(const float * a, float * Q, float * R, const int N, bool gpu = false);
 		static MATHLIB_API void qr(const int * a, int * Q, int * R, const int N, bool gpu = false);
 		static MATHLIB_API void qr(const char * a, char * Q, char * R, const int N, bool gpu = false);
+		static MATHLIB_API void ge_axb(double * a, double * b, int * p, const int N, bool gpu = false);
+		static MATHLIB_API void ge_axb(float * a, float * b, int * p, const int N, bool gpu = false);
+		static MATHLIB_API void ge_axb(int * a, int * b, int * p, const int N, bool gpu = false);
+		static MATHLIB_API void ge_axb(char * a, char * b, int * p, const int N, bool gpu = false);
+
 		static MATHLIB_API void test_swap(double * a, const int ra, const int ca, const int i1, const int i2, const int nrows, const int ncols);
 		static MATHLIB_API void test_maxcol(const double * a, const int col, double * mx, int * idx, const int stride, const int N);
 	};
@@ -98,7 +108,12 @@ namespace Math
 	extern "C" template void Matrix::qr_cpu(const char * a, char * Q, char * R, const int N);
 	extern "C" template void Matrix::qr_cpu(const int * a, int * Q, int * R, const int N);
 	extern "C" template void Matrix::qr_cpu(const float * a, float * Q, float * R, const int N);
-	extern "C" template void Matrix::qr_cpup(const double * a, double * Q, double * R, const int N);
+	extern "C" template void Matrix::qr_cpup(const double * a, double * Q, double * R, const int N); 
+	extern "C" template void Matrix::ge_axb_cpu(double * a, double * b, int * p, const int N);
+	extern "C" template void Matrix::ge_axb_cpu(float * a, float * b, int * p, const int N);
+	extern "C" template void Matrix::ge_axb_cpu(int * a, int * b, int * p, const int N);
+	extern "C" template void Matrix::ge_axb_cpu(char * a, char * b, int * p, const int N);
+
 	//extern "C" template void Matrix::qr_cpup(const int * a, int * b, const int N);
 	//extern "C" template void Matrix::qr_cpup(const float * a, float * b, const int N);
 	//extern "C" template void Matrix::qr_cpup(const double * a, double * b, const int N);

@@ -7,20 +7,6 @@
 #endif
 #include <vector>
 
-// finds most non-zero element along a column
-// accounting for possible permutations of rows and examining
-// only those rows > srow
-template<typename T>
-inline void mostnonzero_col(const T * a, int * P, const int srow, const int scol, T * mx, int * idx, const int nrows, const int ncols)
-{
-	*mx = -T(INFINITY); *idx = srow;
-	for (int r = srow; r < nrows; ++r) {
-		T t = a[P[r] * ncols + scol];
-		t = (t < 0 ? -t : t);
-		if (t >(*mx)) { (*mx) = t; (*idx) = r; }
-	}
-}
-
 namespace Math
 {
 	pthread_barrier_t barrier;
