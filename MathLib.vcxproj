@@ -166,15 +166,18 @@
     <ClCompile Include="matrix_lu.cpp" />
     <ClCompile Include="matrix_qr.cpp" />
     <ClCompile Include="vector.cpp" />
+    <ClCompile Include="vegas2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="complex.h" />
     <ClInclude Include="error.cuh" />
     <ClInclude Include="matrix.h" />
     <ClInclude Include="matrix_utils.h" />
+    <ClInclude Include="rand.h" />
     <ClInclude Include="threads.h" />
     <ClInclude Include="vector.h" />
     <ClInclude Include="vector_utils.h" />
+    <ClInclude Include="vegas2.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="matrix.cu" />
