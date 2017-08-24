@@ -1,4 +1,4 @@
-#include "vegas2.h"
+#include "vegas.h"
 
 #include <cmath>
 #include <stdio.h>
@@ -8,8 +8,8 @@
 #define MAX(a,b) (a > b ? a : b)
 #define MIN(a,b) (a > b ? b : a)
 
-void vegas2::init(size_t dim) {
-	if (s == 0) s = new vegas2_state();
+void vegas::init(size_t dim) {
+	if (s == 0) s = new state();
 	if (r == 0) r = new MT19937<double>(0, 1);
 	s->dx = new double[dim]; std::memset(s->dx, 0, dim*sizeof(double));
 	s->hist = new double[BINS_MAX*dim]; std::memset(s->hist, 0, BINS_MAX*dim*sizeof(double));
@@ -36,7 +36,7 @@ void vegas2::init(size_t dim) {
 	s->sigma = 0;
 }
 
-void vegas2::free() {
+void vegas::free() {
 	if (s->dx) { delete[] s->dx; s->dx = 0; }
 	if (s->hist) { delete[] s->hist; s->hist = 0; }
 	if (s->xt) { delete[] s->xt; s->xt = 0; }
@@ -48,7 +48,7 @@ void vegas2::free() {
 	if (r) { delete r; r = 0; }
 }
 
-int vegas2::integrate(vegas2_integrand f, void * params, double xl[], double xu[], size_t icalls, double* result, double* abserr) {
+int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[], size_t icalls, double* result, double* abserr) {
 
 	if (s->stage == 0) {
 		s->vol = 1.0; s->bins = 1;
@@ -64,6 +64,8 @@ int vegas2::integrate(vegas2_integrand f, void * params, double xl[], double xu[
 		s->samples = 0;
 		s->chisq = 0;
 	}
+	if (s->alpha > 0.6) s->alpha *= 0.9;
+
 	unsigned int bins = BINS_MAX;
 	unsigned int evls = floor(pow(icalls / 2.0, 1.0 / s->dim));
 	s->mode = IMPORTANCE;
@@ -148,7 +150,7 @@ int vegas2::integrate(vegas2_integrand f, void * params, double xl[], double xu[
 	return 1;
 }
 
-bool vegas2::adjust() {
+bool vegas::adjust() {
 	for (int j = s->dim - 1; j >= 0; --j) {
 		s->box[j] = (s->box[j] + 1) % s->evals;
 		if (s->box[j] != 0) return true;
@@ -156,7 +158,7 @@ bool vegas2::adjust() {
 	return false;
 }
 
-void vegas2::resize_grid(unsigned int bins) {
+void vegas::resize_grid(unsigned int bins) {
 	double w = (double)s->bins / (double)bins;
 
 	for (unsigned int j = 0; j < s->dim; j++) {
@@ -176,7 +178,7 @@ void vegas2::resize_grid(unsigned int bins) {
 	s->bins = bins;
 }
 
-void vegas2::rand_x(double xl[], double& binvol) {
+void vegas::rand_x(double xl[], double& binvol) {
 	binvol = 1.0; size_t d = s->dim;
 	for (unsigned int j = 0; j < d; ++j) {
 		double random = 0;
@@ -197,34 +199,35 @@ void vegas2::rand_x(double xl[], double& binvol) {
 	}
 }
 
-void vegas2::accumulate(double y) {
+void vegas::accumulate(double y) {
 	for (unsigned int j = 0; j < s->dim; j++) s->hist[s->bidx[j] * s->dim + j] += y;
 }
 
-void vegas2::refine_grid() {
+double vegas::smooth(unsigned int j) {
+	double oh = s->hist[j];
+	double nh = s->hist[s->dim + j];
+	s->hist[j] = (oh + nh) / 2;
+	double sum = s->hist[j];
+	for (unsigned int i = 1; i < s->bins - 1; ++i) {
+		double tmp = oh + nh;
+		oh = nh;
+		nh = s->hist[(i + 1)*s->dim + j]; // bin x dim
+		s->hist[i*s->dim + j] = (tmp + nh) / 3;
+		sum += s->hist[i*s->dim + j];
+	}
+	s->hist[(s->bins - 1)*s->dim + j] = (nh + oh) / 2;
+	sum += s->hist[(s->bins - 1)*s->dim + j];
+	return sum;
+}
+
+void vegas::refine_grid() {
 	for (unsigned int j = 0; j < s->dim; j++) {
-		double oh = s->hist[j];
-		double nh = s->hist[s->dim + j];
-		s->hist[j] = (oh + nh) / 2;
-		double grid_tot_j = s->hist[j];
-
-		for (unsigned int i = 1; i < s->bins - 1; ++i) {
-			double tmp = oh + nh;
-			oh = nh;
-			nh = s->hist[(i + 1)*s->dim + j];
-			s->hist[i*s->dim + j] = (tmp + nh) / 3;
-			grid_tot_j += s->hist[i*s->dim + j];
-		}
-
-		s->hist[(s->bins - 1)*s->dim + j] = (nh + oh) / 2;
-		grid_tot_j += s->hist[(s->bins - 1)*s->dim + j];
-		double tot_weight = 0;
+		double hsum = smooth(j); double tot_weight = 0;
 		for (unsigned int i = 0; i < s->bins; i++) {
 			s->w[i] = 0;
 			if (s->hist[s->dim*i + j] > 0) {
-				oh = grid_tot_j / s->hist[s->dim*i + j];
-				// damped change
-				s->w[i] = pow(((oh - 1) / oh / log(oh)), s->alpha);
+				double v = s->hist[s->dim*i + j] / hsum; // normalized hist-value
+				s->w[i] = pow((v - 1) / log(v), s->alpha); // update
 			}
 			tot_weight += s->w[i];
 		}
@@ -246,7 +249,7 @@ void vegas2::refine_grid() {
 	}
 }
 
-void vegas2::tracegrid() {
+void vegas::tracegrid() {
 	for (unsigned int j = 0; j < s->dim; ++j) {
 		printf("\n axis %lu \n", j);
 		printf("      x   \n");
@@ -262,12 +265,12 @@ void vegas2::tracegrid() {
 // dll call
 namespace Math
 {
-	extern "C" void Integrate::vegas(vegas2_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr, bool gpu)
+	extern "C" void Integrate::Vegas(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr, bool gpu)
 	{
-		vegas2 v(dim);
-		v.integrate((vegas2_integrand)f, params, xl, xu, 10000, res, abserr);
+		vegas v(dim);
+		v.integrate((vegas_integrand)f, params, xl, xu, icalls, res, abserr);
 		do {
-			v.integrate((vegas2_integrand)f, params, xl, xu, icalls, res, abserr);
+			v.integrate((vegas_integrand)f, params, xl, xu, 10*icalls, res, abserr);
 		} while (fabsf(v.chi_sq() - 1) > 0.5);
 	}
 }

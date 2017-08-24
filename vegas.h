@@ -13,7 +13,7 @@
 #endif  
 
 #define BINS_MAX 50
-typedef double (*vegas2_integrand)(double*, void*);
+typedef double (*vegas_integrand)(double*, void*);
 
 enum { IMPORTANCE = 0, STRATIFIED = 1 };
 
@@ -35,10 +35,10 @@ typedef struct {
 	int mode, stage;
 	unsigned int iters;
 	double result, sigma;
-} vegas2_state;
+} state;
 
-class vegas2 {
-	vegas2_state *s;
+class vegas {
+	state *s;
 	MT19937<double> *r;
 	void init(size_t dim);
 	void free();
@@ -46,15 +46,16 @@ class vegas2 {
 	void accumulate(double y);
 	void resize_grid(unsigned int bins);
 	void refine_grid();
+	double smooth(unsigned int j);
 	bool adjust();
 	void tracegrid();
 
 public:
-	vegas2() : s(0), r(0) { }
-	vegas2(size_t _d) : s(0), r(0) { init(_d); }
-	~vegas2() { free(); }
+	vegas() : s(0), r(0) { }
+	vegas(size_t _d) : s(0), r(0) { init(_d); }
+	~vegas() { free(); }
 
-	int integrate(vegas2_integrand f, void * params, double xl[], double xu[], size_t icalls, double * res, double * abserr);
+	int integrate(vegas_integrand f, void * params, double xl[], double xu[], size_t icalls, double * res, double * abserr);
 	double chi_sq() { return s->chisq; }
 };
 
@@ -64,7 +65,7 @@ namespace Math
 	class Integrate
 	{
 	public:
-		static MATHLIB_API void vegas(vegas2_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr, bool gpu = false);
+		static MATHLIB_API void Vegas(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr, bool gpu = false);
 	};
 }
 #endif
