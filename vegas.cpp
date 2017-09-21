@@ -53,8 +53,7 @@ int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[],
 	}
 	s->chisq = 0; s->wsum = 0; *result = 0;
 
-	// another for-loop for calling with stage > 0
-	for (unsigned int j = 0; j<dim; ++j) {
+	for (unsigned int j = 0; j < dim; ++j) {
 		dx[j] = xu[j] - xl[j];
 		vol *= dx[j];
 	}
@@ -64,7 +63,7 @@ int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[],
 		double intg = 0, vsum = 0; clear();
 		do {
 			double m = 0, q = 0; // mean and variance tracking per bin over the whole domain of integration
-			for (int i = 0; i<s->evals; ++i) {
+			for (int i = 0; i < s->evals; ++i) {
 				double bin_vol = 0;
 				rand_x(xl, dx, x, bin_vol); // initializes x-array
 				double fval = jac * bin_vol * f(x, params);
@@ -82,17 +81,16 @@ int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[],
 
 		double d = (intg - mean);
 		mean += d / (it + 1.0); // running average value of integral
-		var = vsum / (s->evals*(s->evals - 1)); // the bin-variance for this iteration
-												//printf("%d var=%3.14f, ts=%3.14f\n",s->evals, var, ts);
-												// weighted avg result
+		var = vsum / (s->evals*(s->evals - 1)); // the pooled bin-variance for this iteration
+
 		if (var > 0) {
 			double w = (intg * intg / var); // weight factor (this iteration)
 			*result += intg * w; // numerator of weighted average
 			s->wsum += w; // denominator of weighted average
-			double wa = *result / s->wsum; // current weighted average
+			double wa = *result / s->wsum; // current weighted averag
 
-										   // chi-squared computation
-										   // note : unstable and prone to cancellations/rounding errors
+			// chi-squared computation
+			// note : this difference is unstable and prone to cancellations/rounding errors
 			isum += intg * intg * w;
 			double cs = (isum / (wa * wa) - s->wsum);
 			s->chisq = (it > 1 ? cs / (it - 1.0) : cs);
@@ -102,7 +100,6 @@ int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[],
 		refine_grid();
 		double rtmp = *result / (s->wsum > 0 ? s->wsum : 1);
 		double stmp = rtmp / (s->wsum > 0 ? sqrt(s->wsum) : 1);
-		//printf("%d\t%4.8f\t%4.8f\t%4.8f\n",it+1, rtmp, stmp, s->chisq);
 	}
 	s->stage = 1;
 
@@ -118,7 +115,8 @@ void vegas::accumulate(double y) {
 	for (unsigned int j = 0; j < dim; j++) s->hist[j * s->bins + s->xid[j]] += y;
 }
 
-void vegas::clear() { // clear the histogram and reset the starting point in the domain
+// clear the histogram and reset the starting point in the domain
+void vegas::clear() {
 	for (unsigned int i = 0, mx = s->bins * dim; i < mx; ++i) {
 		s->hist[i] = 0;
 		if (i < dim) s->xid[i] = 0;
@@ -127,7 +125,7 @@ void vegas::clear() { // clear the histogram and reset the starting point in the
 
 void vegas::resize_grid() {
 	double w = (double)1.0 / (double)s->bins;
-	for (unsigned int d = 0, idx = 0; d<dim; ++d) {
+	for (unsigned int d = 0, idx = 0; d < dim; ++d) {
 		for (unsigned int b = 0; b <= s->bins; ++b, ++idx) {
 			s->xi[idx] = b*w;
 		}
@@ -211,7 +209,6 @@ void vegas::tracegrid() {
 		printf("      x   \n");
 		for (unsigned int i = 0; i <= s->bins; ++i, ++idx) {
 			printf("%11.2e", s->xi[idx]);
-			if (i % 5 == 4) printf("\n");
 		}
 		printf("\n");
 	}
@@ -229,7 +226,6 @@ void vegas::dbg_grid(int iter) {
 		outfile << "\n";
 	}
 }
-
 
 // dll call
 namespace Math
