@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef MATHLIB_VEGAS2_H
-#define MATHLIB_VEGAS2_H
+#ifndef MATHLIB_VEGAS_H
+#define MATHLIB_VEGAS_H
 
 #include <stdlib.h>
 #include "rand.h"
@@ -13,50 +13,47 @@
 #endif  
 
 #define BINS_MAX 50
-typedef double (*vegas_integrand)(double*, void*);
+typedef double(*vegas_integrand)(double*, void*);
 
 enum { IMPORTANCE = 0, STRATIFIED = 1 };
 
-typedef struct {
-	size_t dim;
-	unsigned int bins, evals;
-	double * xt;  // transformed coordinates range:[0,1]
+struct state {
+	size_t bins, iters, evals;
+	double * xi; // interval markings sz=bins*dim, range:[0,1]
+	int * xid; // utility array tracking xi index 
 	double * w; // weighting factors 
-	double * dx; // integration intervals in coord space
-	double vol;
-	double * x; // untransformed coordinates range:[a,b]
-	int * bidx; // pointer to current bin 
-	int * box; // pointer to current interval along each dim
 	double * hist; // histogrammed function values
+	double alpha; // stiffness parameter for bin refinement
+	int stage, type;
+	double result, wsum, chisq, vol;
 
-	double jac, wint_sum, w_sum, chi_sum, chisq;
-	unsigned int samples, evals_per_iter;
-	double alpha;
-	int mode, stage;
-	unsigned int iters;
-	double result, sigma;
-} state;
+};
 
 class vegas {
-	state *s;
+	size_t MAXBINS;
+	state * s;
+	size_t dim;
 	MT19937<double> *r;
-	void init(size_t dim);
+	void init();
 	void free();
-	void rand_x(double xl[], double& binvol);
+	void rand_x(double xl[], double dx[], double * x, double& binvol);
 	void accumulate(double y);
-	void resize_grid(unsigned int bins);
+	void resize_grid();
 	void refine_grid();
-	double smooth(unsigned int j);
+	double smooth();
+	void clear();
 	bool adjust();
 	void tracegrid();
+	void dbg_grid(int iter);
 
 public:
-	vegas() : s(0), r(0) { }
-	vegas(size_t _d) : s(0), r(0) { init(_d); }
+	vegas(size_t _d) : s(0), r(0), dim(_d), MAXBINS(50) { init(); }
 	~vegas() { free(); }
 
-	int integrate(vegas_integrand f, void * params, double xl[], double xu[], size_t icalls, double * res, double * abserr);
+	int integrate(vegas_integrand f, void * params, double xl[], double xu[], double * res, double * abserr);
 	double chi_sq() { return s->chisq; }
+	void set_maxbins(size_t b);
+	void set_evals(size_t e) { s->evals = e; }
 };
 
 // external calls

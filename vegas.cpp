@@ -1,260 +1,216 @@
 #include "vegas.h"
 
+#include "vegas.h"
 #include <cmath>
 #include <stdio.h>
 #include <cstring>
 #include <vector>
+#include <fstream>
 
 #define MAX(a,b) (a > b ? a : b)
 #define MIN(a,b) (a > b ? b : a)
 
-void vegas::init(size_t dim) {
+void vegas::init() {
 	if (s == 0) s = new state();
 	if (r == 0) r = new MT19937<double>(0, 1);
-	s->dx = new double[dim]; std::memset(s->dx, 0, dim*sizeof(double));
-	s->hist = new double[BINS_MAX*dim]; std::memset(s->hist, 0, BINS_MAX*dim*sizeof(double));
-	s->xt = new double[(BINS_MAX + 1)*dim]; std::memset(s->xt, 0, (BINS_MAX + 1)*dim*sizeof(double));
-	s->w = new double[BINS_MAX]; std::memset(s->w, 0, BINS_MAX*sizeof(double));
-	s->bidx = new int[dim]; std::memset(s->bidx, 0, dim*sizeof(int));
-	s->box = new int[dim]; std::memset(s->box, 0, dim*sizeof(int));
-	s->x = new double[dim]; std::memset(s->x, 0, dim*sizeof(double));
-	
-	s->dim = dim;
+	s->xi = new double[(MAXBINS + 1)*dim]; std::memset(s->xi, 0, (MAXBINS + 1)*dim*sizeof(double));
+	s->xid = new int[dim]; std::memset(s->xid, 0, dim*sizeof(int));
+	s->hist = new double[MAXBINS*dim]; std::memset(s->hist, 0, MAXBINS*dim*sizeof(double));
+	s->w = new double[MAXBINS]; std::memset(s->w, 0, MAXBINS*sizeof(double));
 	s->stage = 0;
 	s->alpha = 1.5;
 	s->iters = 5;
-	s->mode = IMPORTANCE;
+	s->evals = 2;
+	s->type = IMPORTANCE;
 	s->chisq = 0;
-	s->bins = BINS_MAX;
-	s->jac = 0;
-	s->wint_sum = 0; 
-	s->w_sum = 0;
-	s->chi_sum = 0;
-	s->samples = 0;
-	s->evals_per_iter = 0;
+	s->bins = MAXBINS;
 	s->result = 0;
-	s->sigma = 0;
+	s->wsum = 0;
+}
+
+void vegas::set_maxbins(size_t b) {
+	free(); MAXBINS = b; init();
 }
 
 void vegas::free() {
-	if (s->dx) { delete[] s->dx; s->dx = 0; }
 	if (s->hist) { delete[] s->hist; s->hist = 0; }
-	if (s->xt) { delete[] s->xt; s->xt = 0; }
 	if (s->w) { delete[] s->w; s->w = 0; }
-	if (s->bidx) { delete[] s->bidx; s->bidx = 0; }
-	if (s->box) { delete[] s->box; s->box = 0; }
-	if (s->x) { delete[] s->x; s->x = 0; }
+	if (s->xi) { delete[] s->xi; s->xi = 0; }
+	if (s->xid) { delete[] s->xid; s->xid = 0; }
 	if (s) { delete s; s = 0; }
 	if (r) { delete r; r = 0; }
 }
 
-int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[], size_t icalls, double* result, double* abserr) {
+int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[], double* result, double* abserr) {
+	double vol = 1.0, jac = 1.0;
+	double * x = new double[dim]; std::memset(x, 0, dim*sizeof(double));
+	double * dx = new double[dim]; std::memset(dx, 0, dim*sizeof(double));
+	double mean = 0, var = 0, isum = 0;
 
 	if (s->stage == 0) {
-		s->vol = 1.0; s->bins = 1;
-		for (unsigned int j = 0; j < s->dim; ++j) {
-			s->xt[j] = 0.0; s->xt[s->dim + j] = 1.0;
-			s->dx[j] = xu[j] - xl[j]; s->vol *= s->dx[j];
-		}
+		for (unsigned int j = 0; j < dim; ++j) s->xi[j*(s->bins + 1) + 1] = 1.0;
+		resize_grid();
 	}
-	if (s->stage <= 1) {
-		s->wint_sum = 0;
-		s->w_sum = 0;
-		s->chi_sum = 0;
-		s->samples = 0;
-		s->chisq = 0;
-	}
-	if (s->alpha > 0.6) s->alpha *= 0.9;
+	s->chisq = 0; s->wsum = 0; *result = 0;
 
-	unsigned int bins = BINS_MAX;
-	unsigned int evls = floor(pow(icalls / 2.0, 1.0 / s->dim));
-	s->mode = IMPORTANCE;
-	if (BINS_MAX <= 2 * evls) {
-		int evls_per_bin = MAX(evls / BINS_MAX, 1);
-		bins = MIN(evls / evls_per_bin, BINS_MAX);
-		evls = evls_per_bin * bins;
-		s->mode = STRATIFIED;
+	// another for-loop for calling with stage > 0
+	for (unsigned int j = 0; j<dim; ++j) {
+		dx[j] = xu[j] - xl[j];
+		vol *= dx[j];
 	}
-	double tot_evls = pow((double)evls, (int)s->dim);
-	s->evals_per_iter = MAX(icalls / tot_evls, 2);
-	icalls = s->evals_per_iter  * tot_evls;
-	s->jac = s->vol * pow((double)bins, (double)s->dim) / icalls;
-	//printf("..scaling=%4.14f\n", pow((double)bins, (double)s->dim) / icalls);
-	s->evals = evls;
-	if (bins != s->bins) resize_grid(bins);
+	jac = vol;
 
-	double tot_int = 0.0; double tot_sig = 0.0;
 	for (unsigned int it = 0; it < s->iters; ++it) {
-		double intg = 0.0, tss = 0.0, wgt = 0.0;
-
-		// clear
-		for (unsigned int i = 0; i < s->bins; ++i) {
-			for (unsigned int j = 0; j < s->dim; ++j) {
-				s->hist[s->dim*i + j] = 0;
-			}
-		}
-		for (unsigned int i = 0; i < s->dim; ++i) s->box[i] = 0;
-
+		double intg = 0, vsum = 0; clear();
 		do {
-			double m = 0, q = 0, fsq_sum = 0;
-			for (unsigned int k = 0; k < s->evals_per_iter; ++k) {
-				double bin_vol = 0; rand_x(xl, bin_vol); // initializes x-array
-				double fval = s->jac * bin_vol * f(s->x, params);
+			double m = 0, q = 0; // mean and variance tracking per bin over the whole domain of integration
+			for (int i = 0; i<s->evals; ++i) {
+				double bin_vol = 0;
+				rand_x(xl, dx, x, bin_vol); // initializes x-array
+				double fval = jac * bin_vol * f(x, params);
+
+				// update the mean and variance of the integral using this
+				// bin result (online recursion)
 				double d = fval - m;
-				m += d / (k + 1.0);
-				q += d*d*(k / (k + 1.0));
-				if (s->mode != STRATIFIED) accumulate(fval*fval);
+				m += d / (i + 1.0); // favg
+				q += d * (fval - m); // variance
+				if (s->type != STRATIFIED) accumulate(fval * fval);
 			}
-			intg += m * s->evals_per_iter;
-			fsq_sum = q * s->evals_per_iter;
-			tss += fsq_sum;
-			if (s->mode == STRATIFIED) accumulate(fsq_sum);
+			intg += m; // nb. intg is now the sum of the average value of "f" in each bin
+			vsum += q; // vsum is the sum of the variance of each bin over the whole domain
 		} while (adjust());
 
-		double var = tss / (s->evals_per_iter - 1.0);
-		double intg_sq = intg * intg;
+		double d = (intg - mean);
+		mean += d / (it + 1.0); // running average value of integral
+		var = vsum / (s->evals*(s->evals - 1)); // the bin-variance for this iteration
+												//printf("%d var=%3.14f, ts=%3.14f\n",s->evals, var, ts);
+												// weighted avg result
+		if (var > 0) {
+			double w = (intg * intg / var); // weight factor (this iteration)
+			*result += intg * w; // numerator of weighted average
+			s->wsum += w; // denominator of weighted average
+			double wa = *result / s->wsum; // current weighted average
 
-		if (var > 0) wgt = 1.0 / var;
-		else if (s->w_sum > 0) wgt = s->w_sum / s->samples;
-		else wgt = 0;
-
-		s->sigma = sqrt(var);
-		s->result = intg;
-
-		if (wgt > 0) {
-			double m = (s->w_sum > 0 ? s->wint_sum / s->w_sum : 0);
-			double q = intg - m;
-			s->samples++;
-			s->w_sum += wgt;
-			s->wint_sum += intg * wgt;
-			s->chi_sum += intg_sq * wgt;
-			tot_int = s->wint_sum / s->w_sum;
-			tot_sig = sqrt(1 / s->w_sum);
-
-			if (s->samples == 1) s->chisq = 0;
-			else {
-				s->chisq *= (s->samples - 2.0);
-				s->chisq += (wgt / (1 + (wgt / s->w_sum))) * q * q;
-				s->chisq /= (s->samples - 1.0);
-			}
+										   // chi-squared computation
+										   // note : unstable and prone to cancellations/rounding errors
+			isum += intg * intg * w;
+			double cs = (isum / (wa * wa) - s->wsum);
+			s->chisq = (it > 1 ? cs / (it - 1.0) : cs);
 		}
-		else {
-			tot_int += (intg - tot_int) / (it + 1.0);
-			tot_sig = 0.0;
-		}
+		else *result = mean;
+
 		refine_grid();
+		double rtmp = *result / (s->wsum > 0 ? s->wsum : 1);
+		double stmp = rtmp / (s->wsum > 0 ? sqrt(s->wsum) : 1);
+		//printf("%d\t%4.8f\t%4.8f\t%4.8f\n",it+1, rtmp, stmp, s->chisq);
 	}
-	s->stage = 1; // note: stage never increases beyond 1
-	*result = tot_int;
-	*abserr = tot_sig;
+	s->stage = 1;
+
+	*result /= s->wsum;
+	*abserr = *result / (s->wsum > 0 ? sqrt(s->wsum) : 1);
+
+	if (x) { delete[] x; x = 0; }
+	if (dx) { delete[] dx; dx = 0; }
 	return 1;
 }
 
+void vegas::accumulate(double y) {
+	for (unsigned int j = 0; j < dim; j++) s->hist[j * s->bins + s->xid[j]] += y;
+}
+
+void vegas::clear() { // clear the histogram and reset the starting point in the domain
+	for (unsigned int i = 0, mx = s->bins * dim; i < mx; ++i) {
+		s->hist[i] = 0;
+		if (i < dim) s->xid[i] = 0;
+	}
+}
+
+void vegas::resize_grid() {
+	double w = (double)1.0 / (double)s->bins;
+	for (unsigned int d = 0, idx = 0; d<dim; ++d) {
+		for (unsigned int b = 0; b <= s->bins; ++b, ++idx) {
+			s->xi[idx] = b*w;
+		}
+	}
+}
+
 bool vegas::adjust() {
-	for (int j = s->dim - 1; j >= 0; --j) {
-		s->box[j] = (s->box[j] + 1) % s->evals;
-		if (s->box[j] != 0) return true;
+	for (int j = dim - 1; j >= 0; --j) {
+		s->xid[j] = (s->xid[j] + 1) % s->bins;
+		if (s->xid[j] != 0) return true;
 	}
 	return false;
 }
 
-void vegas::resize_grid(unsigned int bins) {
-	double w = (double)s->bins / (double)bins;
-
-	for (unsigned int j = 0; j < s->dim; j++) {
-		double xold = 0; double xnew = 0; double dw = 0;
-		std::vector<double> xtmp;
-		for (unsigned int k = 1; k <= s->bins; ++k) {
-			dw += 1.0;
-			xold = xnew; xnew = s->xt[s->dim*k + j];
-			while (dw > w) {
-				dw -= w;
-				xtmp.push_back(xnew - (xnew - xold)*dw);
-			}
-		}
-		for (unsigned int k = 1; k < bins; k++) s->xt[s->dim*k + j] = xtmp[k - 1];
-		s->xt[s->dim*bins + j] = 1;
-	}
-	s->bins = bins;
-}
-
-void vegas::rand_x(double xl[], double& binvol) {
-	binvol = 1.0; size_t d = s->dim;
-	for (unsigned int j = 0; j < d; ++j) {
+void vegas::rand_x(double xl[], double dx[], double * x, double& binvol) {
+	binvol = 1.0;
+	for (unsigned int d = 0; d < dim; ++d) {
 		double random = 0;
 		while (random == 0 || random == 1) random = r->next();
-		double z = ((s->box[j] + random) / s->evals) * s->bins; // map to bin space
-		int k = z; double bwidth = 0; double y = 0;
-		s->bidx[j] = k;
-		if (k == 0) {
-			bwidth = s->xt[d + j];
-			y = z * bwidth;
-		}
-		else {
-			bwidth = s->xt[(k + 1)*d + j] - s->xt[k*d + j];
-			y = s->xt[k*d + j] + (z - k)*bwidth; // map from bin space to coord space
-		}
-		s->x[j] = xl[j] + y * s->dx[j]; // map from coord space to domain
+		int idx = s->xid[d];
+		double lo = s->xi[d * (s->bins + 1) + idx];
+		double hi = s->xi[d * (s->bins + 1) + (idx + 1)];
+		double bwidth = hi - lo;
+		x[d] = xl[d] + (lo + bwidth * random)*dx[d];
 		binvol *= bwidth;
 	}
 }
 
-void vegas::accumulate(double y) {
-	for (unsigned int j = 0; j < s->dim; j++) s->hist[s->bidx[j] * s->dim + j] += y;
-}
+double vegas::smooth() {
 
-double vegas::smooth(unsigned int j) {
-	double oh = s->hist[j];
-	double nh = s->hist[s->dim + j];
-	s->hist[j] = (oh + nh) / 2;
-	double sum = s->hist[j];
-	for (unsigned int i = 1; i < s->bins - 1; ++i) {
-		double tmp = oh + nh;
-		oh = nh;
-		nh = s->hist[(i + 1)*s->dim + j]; // bin x dim
-		s->hist[i*s->dim + j] = (tmp + nh) / 3;
-		sum += s->hist[i*s->dim + j];
+	// smooth the average before returning the sum  
+	/*
+	s->hist[0] = (s->hist[0] + s->hist[1]) / 2.0;
+	double sum = s->hist[0];
+	unsigned int mx = dim*s->bins-1;
+	for (unsigned int i = 1; i < mx; ++i) {
+	double av = (s->hist[i-1] + s->hist[i] + s->hist[i+1]) / 3.0;
+	s->hist[i] = av;
+	sum += av;
 	}
-	s->hist[(s->bins - 1)*s->dim + j] = (nh + oh) / 2;
-	sum += s->hist[(s->bins - 1)*s->dim + j];
+	s->hist[mx] = (s->hist[mx-1] + s->hist[mx])/ 2.0;
+	sum += s->hist[mx];
+	*/
+	// direct sum, no smoothing  
+	double sum = 0;
+	for (unsigned int i = 0, mx = dim * s->bins; i < mx; ++i) {
+		sum += s->hist[i];
+	}
 	return sum;
 }
 
 void vegas::refine_grid() {
-	for (unsigned int j = 0; j < s->dim; j++) {
-		double hsum = smooth(j); double tot_weight = 0;
-		for (unsigned int i = 0; i < s->bins; i++) {
+	for (unsigned int d = 0, idx = 0; d < dim; ++d) {
+		double hsum = smooth(); double wsum = 0;
+		for (unsigned int i = 0; i < s->bins; ++i, ++idx) {
 			s->w[i] = 0;
-			if (s->hist[s->dim*i + j] > 0) {
-				double v = s->hist[s->dim*i + j] / hsum; // normalized hist-value
-				s->w[i] = pow((v - 1) / log(v), s->alpha); // update
+			if (s->hist[idx] > 0) {
+				double v = s->hist[idx] / hsum; // normalized hist-value
+				s->w[i] = pow((v - 1) / log(v), s->alpha); // update (see Lepage's original paper)
 			}
-			tot_weight += s->w[i];
+			wsum += s->w[i];
 		}
 
-		double pts_per_bin = tot_weight / s->bins;
-		double xold = 0; double xnew = 0; double dw = 0;
-		std::vector<double> xtmp;
-		for (unsigned int k = 0; k < s->bins; k++) {
+		double w_per_bin = wsum / s->bins;
+		double xold = 0; double xnew = 0; double dw = 0; std::vector<double> x;
+		for (unsigned int k = 0; k < s->bins; ++k) {
 			dw += s->w[k];
-			xold = xnew; xnew = s->xt[(k + 1)*s->dim + j];
-
-			while (dw > pts_per_bin) {
-				dw -= pts_per_bin;
-				xtmp.push_back(xnew - (xnew - xold)*dw / s->w[k]);
+			xold = xnew; xnew = s->xi[d*(s->bins + 1) + k + 1];
+			while (dw > w_per_bin) {
+				dw -= w_per_bin;
+				x.push_back(xnew - (xnew - xold)*dw / s->w[k]);
 			}
 		}
-		for (unsigned int k = 1; k < s->bins; ++k) s->xt[k*s->dim + j] = xtmp[k - 1];
-		s->xt[s->bins*s->dim + j] = 1;
+		for (unsigned int b = 1; b < s->bins; ++b) s->xi[d*(s->bins + 1) + b] = x[b - 1];
 	}
 }
 
 void vegas::tracegrid() {
-	for (unsigned int j = 0; j < s->dim; ++j) {
+	for (unsigned int j = 0, idx = 0; j < dim; ++j) {
 		printf("\n axis %lu \n", j);
 		printf("      x   \n");
-		for (unsigned int i = 0; i <= s->bins; i++) {
-			printf("%11.2e", s->xt[s->dim*i + j]);
+		for (unsigned int i = 0; i <= s->bins; ++i, ++idx) {
+			printf("%11.2e", s->xi[idx]);
 			if (i % 5 == 4) printf("\n");
 		}
 		printf("\n");
@@ -262,15 +218,30 @@ void vegas::tracegrid() {
 	printf("\n");
 }
 
+void vegas::dbg_grid(int iter) {
+	char fname[256]; std::sprintf(fname, "grid_%d.txt", iter);
+	std::ofstream outfile(fname, std::ofstream::binary);
+
+	for (unsigned int b = 0; b <= s->bins; ++b) {
+		for (unsigned int j = 0; j < dim; ++j) {
+			outfile << s->xi[j*(s->bins + 1) + b] << "\t";
+		}
+		outfile << "\n";
+	}
+}
+
+
 // dll call
 namespace Math
 {
 	extern "C" void Integrate::Vegas(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr, bool gpu)
 	{
 		vegas v(dim);
-		v.integrate((vegas_integrand)f, params, xl, xu, icalls, res, abserr);
+		v.set_maxbins(10); v.set_evals(2);
+		v.integrate((vegas_integrand)f, params, xl, xu, res, abserr);
+		v.set_evals(16);
 		do {
-			v.integrate((vegas_integrand)f, params, xl, xu, 10*icalls, res, abserr);
+			v.integrate((vegas_integrand)f, params, xl, xu, res, abserr);
 		} while (fabsf(v.chi_sq() - 1) > 0.5);
 	}
 }
