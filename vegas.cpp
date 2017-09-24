@@ -39,6 +39,174 @@ void vegas::free() {
 	if (s->xid) { delete[] s->xid; s->xid = 0; }
 	if (s) { delete s; s = 0; }
 	if (r) { delete r; r = 0; }
+	if (threads) { delete[] threads; threads = 0; }
+}
+
+void vegas::set_threads(size_t nb) {
+	if (threads) { delete[] threads; threads = 0; }
+	nb_threads = nb;
+	if (threads == 0) threads = new THREAD_HANDLE[nb];
+}
+
+void work_task(void * p) {
+	vegas_tdata * pp = (vegas_tdata*)p;
+	pp->fval = 0; pp->vsum = 0; // init
+	size_t bins = pp->bins + 1;
+	double * loc_xi = pp->xi;
+	double * x = new double[pp->dim]; std::memset(x, 0, pp->dim*sizeof(double));
+	
+	for (int j = 0; j < pp->x.size(); ++j) { // loop the index-set
+		double m = 0; double q = 0; // mean and variance estimates for this pt
+		for (int e = 0; e < pp->nb_evals; ++e) { // nb evals for this pt			
+			double binvol = 1;
+			for (int i = 0; i < pp->dim; ++i) { // compute an x-value
+				double random = 0;
+				while (random == 0 || random == 1) random = pp->r->next();
+				int sidx = i * (pp->bins + 1) + pp->x[j].val(i);
+				double lo = loc_xi[sidx];
+				double hi = loc_xi[sidx + 1];
+				double bwidth = hi - lo;
+				//printf("!!DBG dim(%d), idx(%d), rand(%3.5f), lo(%3.5f), hi(%3.5f), bwidth(%3.5f)\n",
+				//	i, sidx, random, lo, hi, bwidth);
+				x[i] = pp->xl[i] + (lo + bwidth * random)*pp->dx[i];
+				binvol *= bwidth;
+			}
+			double yval = pp->jac * binvol * pp->f(x, pp->params);
+			//printf("!!DBG jac(%3.5f), binvol(%3.5f), x(%3.5f,%3.5f,%3.5f,%3.5f), func(%3.5f), y(%3.5f)\n",
+			//	pp->jac, binvol, x[0], x[1], x[2], x[3], 
+			//	pp->f(x, pp->params), yval);
+			double d = yval - m;
+			m += d / (e + 1.0); // favg
+			q += d * (yval - m); // variance
+			//if (s->type != STRATIFIED)
+			{
+				for (unsigned int h = 0; h < pp->dim; ++h)
+				{
+					int idx = h * (bins - 1) + pp->x[j].val(h);
+					pp->t_hist[idx] += yval*yval;
+				}
+			}
+		}
+		pp->fval += m;
+		pp->vsum += q;
+	}
+	if (x) { delete[] x; x = 0; }
+}
+
+void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl[], double dx[]) {
+	if (threads == 0) set_threads(nb_threads);
+	size_t totbins = pow(s->bins, dim);
+	int tstride = totbins / nb_threads;
+	int trem = totbins - tstride * nb_threads; // remainder
+	tdata.clear();
+
+	int * xt = new int[dim]; std::memset(xt, 0, dim*sizeof(int));
+	for (unsigned int t = 0, sidx = 0; t < nb_threads; ++t, sidx += tstride) {
+		vegas_tdata d;
+		d.tid = t;
+		d.jac = jac;
+		d.nb_evals = s->evals;
+		d.f = (vegas_integrand)f;
+		d.params = (void*)params;
+		d.xl = xl;
+		d.dx = dx;
+		d.bins = s->bins;
+		d.dim = dim;
+		d.t_hist = new double[MAXBINS*dim]; std::memset(d.t_hist, 0, MAXBINS*dim*sizeof(double));
+		d.r = new MT19937<double>(0, 1);
+		int mx = (tstride + (t == nb_threads - 1 ? trem : 0));
+		for (int i = 0; i < mx; ++i) {
+			for (int d = dim - 1; d >= 0; --d) {
+				xt[d] = (xt[d] + 1) % s->bins;
+				if (xt[d] != 0) break;
+			}
+			X pt(xt, dim); d.x.push_back(pt);
+		}
+		d.xi = s->xi;
+		d.fval = d.vsum = 0;
+		tdata.push_back(d);
+	}
+	if (xt) { delete[] xt; xt = 0; }
+}
+
+int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[], double * result, double * abserr) {
+	double vol = 1.0, jac = 1.0;
+	double * dx = new double[dim]; std::memset(dx, 0, dim*sizeof(double));
+	double mean = 0, var = 0, isum = 0;
+
+	for (unsigned int j = 0; j < dim; ++j) {
+		dx[j] = xu[j] - xl[j];
+		vol *= dx[j];
+	}
+	jac = vol;
+
+	if (s->stage == 0) {
+		for (unsigned int j = 0; j < dim; ++j) s->xi[j*(s->bins + 1) + 1] = 1.0;
+		resize_grid();
+		init_threads(jac, f, params, xl, dx);
+	}
+	else {
+		for (int j = 0; j < nb_threads; ++j) {
+			tdata[j].nb_evals = s->evals; // reset
+			tdata[j].jac = jac; 
+			tdata[j].dx = dx;
+			tdata[j].xl = xl;
+		}
+	}
+	s->chisq = 0; s->wsum = 0; *result = 0;
+	//printf("\t!!DBG start integrating..\n");
+	for (unsigned int it = 0; it < s->iters; ++it) {
+		double var = 0; double intg = 0; clear();
+
+		for (int j = 0; j < nb_threads; ++j) {
+			tdata[j].fval = 0;
+			tdata[j].vsum = 0;
+			tdata[j].xi = s->xi;
+			std::memset(tdata[j].t_hist, 0, dim*s->bins * sizeof(double));
+		}
+
+		/*launch threads*/
+		for (int j = 0; j < nb_threads; ++j) threads[j] = start_thread((thread_fnc)work_task, (void*)&tdata[j], j);
+		wait_threads_finish(threads, nb_threads);
+
+		for (int j = 0; j < nb_threads; ++j)
+		{
+			intg += tdata[j].fval;
+			var += tdata[j].vsum;
+			for (unsigned int d = 0; d < dim; ++d)
+			{
+				for (int k = 0; k < tdata[j].x.size(); ++k) {
+					int idx = d * s->bins + tdata[j].x[k].val(d);
+					s->hist[idx] += tdata[j].t_hist[idx];
+				}
+			}
+		}
+
+		double d = (intg - mean);
+		mean += d / (it + 1.0); // running average value of integral
+
+		var /= (s->evals * (s->evals - 1)); // pooled variance from all threads
+
+		if (var > 0) {
+			double w = (intg * intg / var); // weight factor (this iteration)
+			*result += intg * w; // numerator of weighted average
+			s->wsum += w; // denominator of weighted average
+			double wa = *result / s->wsum; // current weighted averag
+			isum += intg * intg * w;
+
+			double cs = (isum / (wa * wa) - s->wsum);
+			s->chisq = (it > 1 ? cs / (it - 1.0) : cs);
+		}
+		else *result = mean;
+		refine_grid();
+		//printf("!!DBG result(%d)=%3.14f, chisq=%4.5f\n", it, *result / s->wsum, s->chisq);
+	}
+	s->stage = 1;
+	*result /= s->wsum;
+	*abserr = *result / (s->wsum > 0 ? sqrt(s->wsum) : 1);
+
+	if (dx) { delete[] dx; dx = 0; }
+	return 1;
 }
 
 int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[], double* result, double* abserr) {
@@ -96,13 +264,9 @@ int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[],
 			s->chisq = (it > 1 ? cs / (it - 1.0) : cs);
 		}
 		else *result = mean;
-
 		refine_grid();
-		double rtmp = *result / (s->wsum > 0 ? s->wsum : 1);
-		double stmp = rtmp / (s->wsum > 0 ? sqrt(s->wsum) : 1);
 	}
 	s->stage = 1;
-
 	*result /= s->wsum;
 	*abserr = *result / (s->wsum > 0 ? sqrt(s->wsum) : 1);
 
@@ -234,10 +398,21 @@ namespace Math
 	{
 		vegas v(dim);
 		v.set_maxbins(10); v.set_evals(2);
-		v.integrate((vegas_integrand)f, params, xl, xu, res, abserr);
-		v.set_evals(16);
-		do {
-			v.integrate((vegas_integrand)f, params, xl, xu, res, abserr);
-		} while (fabsf(v.chi_sq() - 1) > 0.5);
+
+		// parallel interfaces
+		if (gpu) {
+			v.pintegrate(f, params, xl, xu, res, abserr);
+			v.set_evals(16);
+			do {
+				v.pintegrate(f, params, xl, xu, res, abserr);
+			} while (fabsf(v.chi_sq() - 1) > 0.5);
+		}
+		else {
+			v.integrate(f, params, xl, xu, res, abserr);
+			v.set_evals(16);
+			do {
+				v.integrate(f, params, xl, xu, res, abserr);
+			} while (fabsf(v.chi_sq() - 1) > 0.5);
+		}
 	}
 }

@@ -1,5 +1,5 @@
-#ifndef MATHLIB_RAND_H
-#define MATHLIB_RAND_H
+#ifndef _RAND_H
+#define _RAND_H
 
 #include <random>
 
