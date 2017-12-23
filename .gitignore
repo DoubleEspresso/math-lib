@@ -1,6 +1,7 @@
 #visual studio related
 *.filters
 *.obj
+*.o
 *.exe
 *.ilk
 *.pdb
@@ -8,9 +9,6 @@
 *.idb
 *.suo
 *.log
-*.opensdf
-*.sdf
-*.user
 
 #misc
 *.tar
@@ -18,6 +16,4 @@
 
 
 #directories
-x64
-Debug
-
+x64\

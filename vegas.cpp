@@ -13,10 +13,10 @@
 void vegas::init() {
 	if (s == 0) s = new state();
 	if (r == 0) r = new MT19937<double>(0, 1);
-	s->xi = new double[(MAXBINS + 1)*dim]; std::memset(s->xi, 0, (MAXBINS + 1)*dim*sizeof(double));
-	s->xid = new int[dim]; std::memset(s->xid, 0, dim*sizeof(int));
-	s->hist = new double[MAXBINS*dim]; std::memset(s->hist, 0, MAXBINS*dim*sizeof(double));
-	s->w = new double[MAXBINS]; std::memset(s->w, 0, MAXBINS*sizeof(double));
+	s->xi = new double[(MAXBINS + 1)*dim]; memset(s->xi, 0, (MAXBINS + 1)*dim*sizeof(double));
+	s->xid = new int[dim]; memset(s->xid, 0, dim*sizeof(int));
+	s->hist = new double[MAXBINS*dim]; memset(s->hist, 0, MAXBINS*dim*sizeof(double));
+	s->w = new double[MAXBINS]; memset(s->w, 0, MAXBINS*sizeof(double));
 	s->stage = 0;
 	s->alpha = 1.5;
 	s->iters = 5;
@@ -53,7 +53,7 @@ void work_task(void * p) {
 	pp->fval = 0; pp->vsum = 0; // init
 	size_t bins = pp->bins + 1;
 	double * loc_xi = pp->xi;
-	double * x = new double[pp->dim]; std::memset(x, 0, pp->dim*sizeof(double));
+	double * x = new double[pp->dim]; memset(x, 0, pp->dim*sizeof(double));
 	
 	for (int j = 0; j < pp->x.size(); ++j) { // loop the index-set
 		double m = 0; double q = 0; // mean and variance estimates for this pt
@@ -100,7 +100,7 @@ void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl
 	int trem = totbins - tstride * nb_threads; // remainder
 	tdata.clear();
 
-	int * xt = new int[dim]; std::memset(xt, 0, dim*sizeof(int));
+	int * xt = new int[dim]; memset(xt, 0, dim*sizeof(int));
 	for (unsigned int t = 0, sidx = 0; t < nb_threads; ++t, sidx += tstride) {
 		vegas_tdata d;
 		d.tid = t;
@@ -112,7 +112,7 @@ void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl
 		d.dx = dx;
 		d.bins = s->bins;
 		d.dim = dim;
-		d.t_hist = new double[MAXBINS*dim]; std::memset(d.t_hist, 0, MAXBINS*dim*sizeof(double));
+		d.t_hist = new double[MAXBINS*dim]; memset(d.t_hist, 0, MAXBINS*dim*sizeof(double));
 		d.r = new MT19937<double>(0, 1);
 		int mx = (tstride + (t == nb_threads - 1 ? trem : 0));
 		for (int i = 0; i < mx; ++i) {
@@ -131,7 +131,7 @@ void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl
 
 int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[], double * result, double * abserr) {
 	double vol = 1.0, jac = 1.0;
-	double * dx = new double[dim]; std::memset(dx, 0, dim*sizeof(double));
+	double * dx = new double[dim]; memset(dx, 0, dim*sizeof(double));
 	double mean = 0, var = 0, isum = 0;
 
 	for (unsigned int j = 0; j < dim; ++j) {
@@ -162,7 +162,7 @@ int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[]
 			tdata[j].fval = 0;
 			tdata[j].vsum = 0;
 			tdata[j].xi = s->xi;
-			std::memset(tdata[j].t_hist, 0, dim*s->bins * sizeof(double));
+			memset(tdata[j].t_hist, 0, dim*s->bins * sizeof(double));
 		}
 
 		/*launch threads*/
@@ -211,8 +211,8 @@ int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[]
 
 int vegas::integrate(vegas_integrand f, void * params, double xl[], double xu[], double* result, double* abserr) {
 	double vol = 1.0, jac = 1.0;
-	double * x = new double[dim]; std::memset(x, 0, dim*sizeof(double));
-	double * dx = new double[dim]; std::memset(dx, 0, dim*sizeof(double));
+	double * x = new double[dim]; memset(x, 0, dim*sizeof(double));
+	double * dx = new double[dim]; memset(dx, 0, dim*sizeof(double));
 	double mean = 0, var = 0, isum = 0;
 
 	if (s->stage == 0) {
