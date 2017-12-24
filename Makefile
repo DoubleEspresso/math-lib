@@ -12,14 +12,6 @@ CUFLAGS = -std=c++11 -c -arch=sm_20
 DFLAGS =
 LFLAGS = -lpthread -lrt -L/usr/local/cuda/lib64/stubs -lcuda -L/usr/local/cuda/lib64 -lcudart
 
-#CUDA_ARCH := -gencode arch=compute_20,code=sm_20 \
-#                -gencode arch=compute_21,code=sm_21 \
-#                -gencode arch=compute_30,code=sm_30 \
-#                -gencode arch=compute_35,code=sm_35 \
-#                -gencode arch=compute_50,code=sm_50 \
-#                -gencode arch=compute_52,code=sm_52 \
-#		-gencode arch=compute_60,code=sm_60
-
 CUDA_ARCH :=	-gencode arch=compute_30,code=sm_30 \
                 -gencode arch=compute_35,code=sm_35 \
                 -gencode arch=compute_50,code=sm_50 \
@@ -29,8 +21,6 @@ CUDA_ARCH :=	-gencode arch=compute_30,code=sm_30 \
 NVFLAGS := -O3 -rdc=true #rdc needed for separable compilation
 NVFLAGS += $(CUDA_ARCH)
 NVFLAGS += $(foreach id,$(INC),-I$(id))
-
-
 INSTALL = /usr/local/bin
 
 EXE_BITS =
@@ -95,8 +85,6 @@ USERMACROS += -DVERSION=\"$(GIT_VERSION)\"
 
 OBJ := $(patsubst %.cu, %.cu.o, $(filter %.cu,$(CU_SRC)))
 #OBJ += $(patsubst %.cpp, %.o, $(filter %.cpp,$(SRC)))	
-
-
 
 .PHONY: all
 .SUFFIXES: .cpp .cu .o
