@@ -115,7 +115,7 @@ void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl
     d.r = new MT19937<double>(0, 1);
     int mx = (tstride + (t == nb_threads - 1 ? trem : 0));
     for (int i = 0; i < mx; ++i) {
-      for (size_t d = dim - 1; d >= 0; --d) {
+      for (int d = dim - 1; d >= 0; --d) {
 	xt[d] = (xt[d] + 1) % s->bins;
 	if (xt[d] != 0) break;
       }
@@ -280,7 +280,7 @@ void vegas::accumulate(double y) {
 
 // clear the histogram and reset the starting point in the domain
 void vegas::clear() {
-  for (size_t i = 0, mx = s->bins * dim; i < mx; ++i) {
+  for (int i = 0, mx = s->bins * dim; i < mx; ++i) {
     s->hist[i] = 0;
     if (i < dim) s->xid[i] = 0;
   }
@@ -296,7 +296,7 @@ void vegas::resize_grid() {
 }
 
 bool vegas::adjust() {
-  for (size_t j = dim - 1; j >= 0; --j) {
+  for (int j = dim - 1; j >= 0; --j) {
     s->xid[j] = (s->xid[j] + 1) % s->bins;
     if (s->xid[j] != 0) return true;
   }
@@ -334,7 +334,7 @@ double vegas::smooth() {
   */
   // direct sum, no smoothing  
   double sum = 0;
-  for (size_t i = 0, mx = dim * s->bins; i < mx; ++i) {
+  for (int i = 0, mx = dim * s->bins; i < mx; ++i) {
     sum += s->hist[i];
   }
   return sum;
