@@ -5,10 +5,12 @@ OS = $(shell uname)
 OSFLAVOR =
 
 USERMACROS = -DNDEBUG -DTHREADED
-CFLAGS = -Wall -O3 -fomit-frame-pointer -fstrict-aliasing -ffast-math -std=gnu++11 -pthread -fpermissive
+INC = . /usr/local/cuda/include
+CFLAGS = $(foreach id,$(INC),-I$(id))
+CFLAGS += -Wall -O3 -fomit-frame-pointer -fstrict-aliasing -ffast-math -std=gnu++11 -pthread
 CUFLAGS = -std=c++11 -c -arch=sm_20
 DFLAGS =
-LFLAGS = -lpthread -lrt -L/usr/local/cuda/lib64 -lcudart
+LFLAGS = -lpthread -lrt -L/usr/local/cuda/lib64/stubs -lcuda -L/usr/local/cuda/lib64 -lcudart
 
 #CUDA_ARCH := -gencode arch=compute_20,code=sm_20 \
 #                -gencode arch=compute_21,code=sm_21 \
@@ -17,12 +19,17 @@ LFLAGS = -lpthread -lrt -L/usr/local/cuda/lib64 -lcudart
 #                -gencode arch=compute_50,code=sm_50 \
 #                -gencode arch=compute_52,code=sm_52 \
 #		-gencode arch=compute_60,code=sm_60
-CUDA_ARCH := -gencode arch=compute_61,code=sm_61
 
-INC = . /usr/local/cuda/include
+CUDA_ARCH :=	-gencode arch=compute_30,code=sm_30 \
+                -gencode arch=compute_35,code=sm_35 \
+                -gencode arch=compute_50,code=sm_50 \
+                -gencode arch=compute_52,code=sm_52 \
+		-gencode arch=compute_60,code=sm_60
+
 NVFLAGS := -O3 -rdc=true #rdc needed for separable compilation
 NVFLAGS += $(CUDA_ARCH)
 NVFLAGS += $(foreach id,$(INC),-I$(id))
+
 
 INSTALL = /usr/local/bin
 
@@ -32,7 +39,7 @@ THREADED =
 GIT_VERSION =
 
 # build info
-SRC := main.cpp matrix.cpp matrix_ge.cpp matrix_lu.cpp matrix_qr.cpp vector.cpp vegas.cpp
+SRC := main.cpp vegas.cpp
 CU_SRC := matrix.cu matrix_lu.cu vector.cu
 
 # gpu compiler
@@ -86,8 +93,10 @@ GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
 USERMACROS += -DBUILD_DATE="\"$$(date)\""
 USERMACROS += -DVERSION=\"$(GIT_VERSION)\"
 
-OBJ := $(patsubst %.cpp, %.o, $(filter %.cpp,$(SRC)))
-OBJ += $(patsubst %.cu, %.cu.o, $(filter %.cu,$(CU_SRC)))
+OBJ := $(patsubst %.cu, %.cu.o, $(filter %.cu,$(CU_SRC)))
+#OBJ += $(patsubst %.cpp, %.o, $(filter %.cpp,$(SRC)))	
+
+
 
 .PHONY: all
 .SUFFIXES: .cpp .cu .o
@@ -116,11 +125,11 @@ information:
 %.cu.o:%.cu
 	$(NVCC) -c $(NVFLAGS) $< -o $@
 
-%.o:%.cpp
-	$(CC) -c $(CFLAGS) $(USERMACROS) $< -o $@
+#%.o:%.cpp
+#	$(CC) -fPIC $(CFLAGS) $(USERMACROS) $< -o $@
 
 link: $(OBJ)
-	$(CC) -o $(EXE) $(OBJ) $(LFLAGS)
+	$(NVCC) -o $(EXE) $(SRC) $(OBJ) $(LFLAGS)
 
 install: all
 	if [ ! -d $(INSTALL) ]; then \

@@ -1,22 +1,15 @@
 #pragma once
-
 #ifndef MATHLIB_VEGAS_H
 #define MATHLIB_VEGAS_H
 
 #include <cstring>
 #include <stdlib.h>
+
 #include "rand.h"
 #include "threads.h"
 
-#ifdef MATHLIB_EXPORTS  
-#define MATHLIB_API __declspec(dllexport)   
-#else  
-#define MATHLIB_API
-#endif  
-
 #define BINS_MAX 50
 typedef double(*vegas_integrand)(double*, void*);
-
 enum { IMPORTANCE = 0, STRATIFIED = 1 };
 
 struct state {
@@ -28,7 +21,6 @@ struct state {
   double alpha; // stiffness parameter for bin refinement
   int stage, type;
   double result, wsum, chisq, vol;
-
 };
 
 struct X {
@@ -92,20 +84,18 @@ class vegas {
   ~vegas() { free(); }
   void set_threads(size_t nb);
   int pintegrate(vegas_integrand f, void * params, double xl[], double xu[], double * res, double * abserr);
-  //void work_task(void * p);
   int integrate(vegas_integrand f, void * params, double xl[], double xu[], double * res, double * abserr);
   double chi_sq() { return s->chisq; }
   void set_maxbins(size_t b);
   void set_evals(size_t e) { s->evals = e; }
 };
 
-// external calls
-namespace Math
-{
-  class Integrate
-  {
-  public:
-    static MATHLIB_API void Vegas(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr, bool gpu = false);
+
+namespace Math {
+  namespace Integrate {
+    void Vegas(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr);
+    void Vegasp(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr);
   };
-}
+};
+
 #endif

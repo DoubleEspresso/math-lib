@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef SYSTEM_THREADS_H
-#define SYSTEM_THREADS_H
+#ifndef MATHLIB_THREADS_H
+#define MATHLIB_THREADS_H
 
 #ifdef _WIN32
 #include <io.h>
@@ -26,14 +26,13 @@ typedef void*(*thread_fnc)(void*);
 #define thread_wait(x) pthread_cond_wait(&(x))
 #define thread_sleep(x) sleep(x)
 
-#elif __linux
+#elif defined(__GNUC__)
 extern "C" {
-#include <pthread.h>
-#include <unistd.h>
+  #include <pthread.h>
+  #include <unistd.h>
 }
 typedef pthread_mutex_t MUTEX;
-typedef pthread_t THREAD;
-typedef int THREAD_HANDLE;
+typedef pthread_t THREAD_HANDLE;
 typedef pthread_cond_t CONDITION;
 typedef void*(*thread_fnc)(void*);
 
@@ -50,16 +49,15 @@ typedef void*(*thread_fnc)(void*);
 #define thread_sleep(x) usleep(x)
 #define cond_destroy(x) pthread_cond_destroy(&(x))
 
-namespace {
-  THREAD_HANDLE start_thread(thread_fnc f, void * data, unsigned long threadid) {
-    return thread_create(threadid, f, data);
+namespace {  
+  inline THREAD_HANDLE start_thread(thread_fnc f, void * data, unsigned long id) {
+    THREAD_HANDLE t;
+    return (thread_create(t, f, data) == 0 ? t : 0);
   }
   
-  void wait_threads_finish(THREAD_HANDLE * handles, int nb) {
+  inline void wait_threads_finish(THREAD_HANDLE * handles, int nb) {
     for (int j = 0; j < nb; ++j) thread_join(handles[j]);
-  }
-
-  
+  }  
 };
 
 #elif __unix 

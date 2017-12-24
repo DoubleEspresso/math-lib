@@ -4,13 +4,14 @@
 #define MATHLIB_MATRIX_UTILS_H
 
 #include <iostream>
+#include <limits>
+#define INF std::numeric_limits<double>::infinity()
 
 // note : cpu matrix utility class containing some hard-coded
 // matrix multiplication and specialized strassen multiplication 
 // for smaller matrices (to be used to speed up matrix multiplication on the cpu)
 template<typename T>
-inline void mm8x8_fast(const T * a, const T * b, T * c)
-{
+inline void mm8x8_fast(const T * a, const T * b, T * c) {
   c[0] = a[0] * b[0] + a[1] * b[8] + a[2] * b[16] + a[3] * b[24] + a[4] * b[32] + a[5] * b[40] + a[6] * b[48] + a[7] * b[56];
   c[1] = a[0] * b[1] + a[1] * b[9] + a[2] * b[17] + a[3] * b[25] + a[4] * b[33] + a[5] * b[41] + a[6] * b[49] + a[7] * b[57];
   c[2] = a[0] * b[2] + a[1] * b[10] + a[2] * b[18] + a[3] * b[26] + a[4] * b[34] + a[5] * b[42] + a[6] * b[50] + a[7] * b[58];
@@ -85,19 +86,12 @@ inline void mm8x8_fast(const T * a, const T * b, T * c)
 }
 
 template<typename T>
-inline void submat(const T * a, const T *& b, const int s)
-{
+inline void submat(const T * a, const T *& b, const int s) {
   b = &a[s];
 }
 
 template<typename T>
-inline void submat(const T * a, T * b, const int sa, const int stride, const int row, const int col)
-{
-  // std::copy is actually slower
-  //for (int r = 0, s1 = 0, s2 = 0; r < N; ++r, s1 += stride, s2 += N)
-  //{
-  //	std::copy(a + s1 + sa, a + sa + s1 + N, b + s2);
-  //}
+inline void submat(const T * a, T * b, const int sa, const int stride, const int row, const int col) {
   // note : returns a square matrix of size NxN
   int ss = sa;
   for (int r = 0, i = 0; r < row; ++r) {
@@ -109,32 +103,27 @@ inline void submat(const T * a, T * b, const int sa, const int stride, const int
 }
 
 template<typename T>
-inline void subcol(const T * a, T * b, const int sa, const int stride, const int N)
-{
+inline void subcol(const T * a, T * b, const int sa, const int stride, const int N) {
   for (int j = sa, idx = 0; idx < N; j += stride, ++idx) b[idx] = a[j];
 }
 
 template<typename T>
-inline void subrow(const T * a, T * b, const int sa, const int N)
-{
+inline void subrow(const T * a, T * b, const int sa, const int N) {
   for (int j = sa, idx = 0; idx < N; ++j, ++idx) b[idx] = a[j];
 }
 
 template<typename T>
-inline void add8x8(const T * a, const T * b, T * c)
-{
+inline void add8x8(const T * a, const T * b, T * c) {
   for (int j = 0; j < 64; ++j) c[j] = a[j] + b[j];
 }
 
 template<typename T>
-inline void sub8x8(const T * a, const T * b, T * c)
-{
+inline void sub8x8(const T * a, const T * b, T * c) {
   for (int j = 0; j < 64; ++j) c[j] = a[j] - b[j];
 }
 
 template<typename T>
-inline void swap(T * a, const int ra, const int ca, const int i1, const int i2, const int nrows, const int ncols)
-{
+inline void swap(T * a, const int ra, const int ca, const int i1, const int i2, const int nrows, const int ncols) {
   // purpose: in place swap of a "chunk" of matrix "a".
   // ra: rows of a
   // ca: cols of a
@@ -159,9 +148,8 @@ inline void swap(T * a, const int ra, const int ca, const int i1, const int i2, 
 // accounting for possible permutations of rows and examining
 // only those rows > srow
 template<typename T>
-inline void mostnonzero_col(const T * a, int * P, const int srow, const int scol, T * mx, int * idx, const int nrows, const int ncols)
-{
-  *mx = -T(INFINITY); *idx = srow;
+inline void mostnonzero_col(const T * a, int * P, const int srow, const int scol, T * mx, int * idx, const int nrows, const int ncols) {
+  *mx = -T(INF); *idx = srow;
   for (int r = srow; r < nrows; ++r) {
     T t = a[P[r] * ncols + scol];
     t = (t < 0 ? -t : t);
@@ -170,23 +158,20 @@ inline void mostnonzero_col(const T * a, int * P, const int srow, const int scol
 }
 
 template<typename T>
-inline void swap_rows(T * a, const int ra, const int ca, const int i1, const int i2)
-{
+inline void swap_rows(T * a, const int ra, const int ca, const int i1, const int i2) {
   swap(a, ra, ca, i1, i2, 1, ca);
 }
 
 template<typename T>
-inline void max_col(const T * a, const int sidx, T * mx, int * idx, const int nrows, const int ncols)
-{
-  *mx = -T(INFINITY); *idx = 0; int srow = sidx / nrows;
+inline void max_col(const T * a, const int sidx, T * mx, int * idx, const int nrows, const int ncols) {
+  *mx = -T(INF); *idx = 0; int srow = sidx / nrows;
   for (int c = sidx, max = nrows * ncols, i = 0; c < max; c += ncols, ++i) {
     if (a[c] > (*mx)) { (*mx) = a[c]; (*idx) = srow + i; }
   }
 }
 
 template<typename T>
-inline void strassen16x16(const T * a, const T * b, T * c)
-{
+inline void strassen16x16(const T * a, const T * b, T * c) {
   T a11[64]; submat<T>(a, a11, 0, 16, 8, 8);
   T a12[64]; submat<T>(a, a12, 8, 16, 8, 8);
   T a21[64]; submat<T>(a, a21, 128, 16, 8, 8);
@@ -248,5 +233,4 @@ inline void strassen16x16(const T * a, const T * b, T * c)
     ss += 16;
   }
 }
-
 #endif

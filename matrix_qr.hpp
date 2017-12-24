@@ -1,34 +1,25 @@
 #include <cstring>
+#include <vector>
+#include <stdio.h>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #include "matrix.h"
 #include "matrix_utils.h"
 
-#include <stdio.h>
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-#include <vector>
-
 namespace Math
 {
-  extern "C" void Matrix::qr(const char * a, char * Q, char * R, const int N, bool gpu) {}
-  extern "C" void Matrix::qr(const int * a, int * Q, int * R, const int N, bool gpu) {}
-  extern "C" void Matrix::qr(const float * a, float * Q, float * R, const int N, bool gpu) {}
-  extern "C" void Matrix::qr(const double * a, double * Q, double * R, const int N, bool gpu) 
-  {
-    qr_cpu<double>(a, Q, R, N);
-  }
-
-
+  
   template<typename T>
-  void Matrix::qr_cpu(const T * a, T * Q, T * R, const int N) 
-  {
+  void Matrix::qr_cpu(const T * a, T * Q, T * R, const int N) {
 #ifdef _WIN32
-    LARGE_INTEGER frequency;        // ticks per second
-    LARGE_INTEGER t1, t2;           // ticks
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER t1, t2;
     double elapsedTime;
-    QueryPerformanceFrequency(&frequency);  // get ticks per second
-    QueryPerformanceCounter(&t1);	// start timer
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&t1);
 #endif
 
     int NN = N*N; 
@@ -60,24 +51,22 @@ namespace Math
 	    R[(r == 0 ? cN : rN) + c] = (r == 0 ? cos*u[col] - sin*l[col] : sin*u[col] + cos*l[col]);
 	  }
 	}
-
-	if (col == 0 && row == 1)
-	  {
-	    for (int j = 0, idx = 0; j < N; ++j, idx += N) Q[idx + j] = 1;
-	    Q[cN + col] = cos; Q[cN + row] = -sin;
-	    Q[rN + col] = sin; Q[rN + row] = cos;
-	  }
-	else
-	  {
-	    /*build Q*/
-	    submat(Q, u, cN, N, 1, N);
-	    submat(Q, l, rN, N, 1, N);
-	    for (int r = 0; r < 2; ++r) {
-	      for (int c = 0; c < N; ++c) {
-		Q[(r == 0 ? cN : rN) + c] = (r == 0 ? cos*u[col] - sin*l[col] : sin*u[col] + cos*l[col]);
-	      }
+	
+	if (col == 0 && row == 1) {
+	  for (int j = 0, idx = 0; j < N; ++j, idx += N) Q[idx + j] = 1;
+	  Q[cN + col] = cos; Q[cN + row] = -sin;
+	  Q[rN + col] = sin; Q[rN + row] = cos;
+	}
+	else {
+	  /*build Q*/
+	  submat(Q, u, cN, N, 1, N);
+	  submat(Q, l, rN, N, 1, N);
+	  for (int r = 0; r < 2; ++r) {
+	    for (int c = 0; c < N; ++c) {
+	      Q[(r == 0 ? cN : rN) + c] = (r == 0 ? cos*u[col] - sin*l[col] : sin*u[col] + cos*l[col]);
 	    }
 	  }
+	}
       }
     }
 
