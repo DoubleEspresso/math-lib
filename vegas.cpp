@@ -56,12 +56,12 @@ void work_task(void * p) {
 	
   for (int j = 0; j < pp->x.size(); ++j) { // loop the index-set
     double m = 0; double q = 0; // mean and variance estimates for this pt
-    for (int e = 0; e < pp->nb_evals; ++e) { // nb evals for this pt			
+    for (unsigned int e = 0; e < pp->nb_evals; ++e) { // nb evals for this pt			
       double binvol = 1;
-      for (int i = 0; i < pp->dim; ++i) { // compute an x-value
+      for (unsigned int i = 0; i < pp->dim; ++i) { // compute an x-value
 	double random = 0;
 	while (random == 0 || random == 1) random = pp->r->next();
-	int sidx = i * (pp->bins + 1) + pp->x[j].val(i);
+	int sidx = (int)(i * (pp->bins + 1) + pp->x[j].val(i));
 	double lo = loc_xi[sidx];
 	double hi = loc_xi[sidx + 1];
 	double bwidth = hi - lo;
@@ -81,7 +81,7 @@ void work_task(void * p) {
       {
 	for (unsigned int h = 0; h < pp->dim; ++h)
 	  {
-	    int idx = h * (bins - 1) + pp->x[j].val(h);
+	    int idx = (int)(h * (bins - 1) + pp->x[j].val(h));
 	    pp->t_hist[idx] += yval*yval;
 	  }
       }
@@ -94,9 +94,9 @@ void work_task(void * p) {
 
 void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl[], double dx[]) {
   if (threads == 0) set_threads(nb_threads);
-  size_t totbins = pow(s->bins, dim);
-  int tstride = totbins / nb_threads;
-  int trem = totbins - tstride * nb_threads; // remainder
+  size_t totbins = (size_t)(pow(s->bins, dim));
+  int tstride = (int)(totbins / nb_threads);
+  int trem = (int)(totbins - tstride * nb_threads); // remainder
   tdata.clear();
 
   int * xt = new int[dim]; memset(xt, 0, dim*sizeof(int));
@@ -104,18 +104,18 @@ void vegas::init_threads(double jac, vegas_integrand f, void * params, double xl
     vegas_tdata d;
     d.tid = t;
     d.jac = jac;
-    d.nb_evals = s->evals;
+    d.nb_evals = (unsigned long)s->evals;
     d.f = (vegas_integrand)f;
     d.params = (void*)params;
     d.xl = xl;
     d.dx = dx;
-    d.bins = s->bins;
-    d.dim = dim;
+    d.bins = (unsigned long)s->bins;
+    d.dim = (unsigned long)dim;
     d.t_hist = new double[MAXBINS*dim]; memset(d.t_hist, 0, MAXBINS*dim*sizeof(double));
     d.r = new MT19937<double>(0, 1);
     int mx = (tstride + (t == nb_threads - 1 ? trem : 0));
     for (int i = 0; i < mx; ++i) {
-      for (int d = dim - 1; d >= 0; --d) {
+      for (size_t d = dim - 1; d >= 0; --d) {
 	xt[d] = (xt[d] + 1) % s->bins;
 	if (xt[d] != 0) break;
       }
@@ -146,7 +146,7 @@ int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[]
   }
   else {
     for (int j = 0; j < nb_threads; ++j) {
-      tdata[j].nb_evals = s->evals; // reset
+      tdata[j].nb_evals = (unsigned long)s->evals; // reset
       tdata[j].jac = jac; 
       tdata[j].dx = dx;
       tdata[j].xl = xl;
@@ -166,7 +166,7 @@ int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[]
 
     /*launch threads*/
     for (int j = 0; j < nb_threads; ++j) threads[j] = start_thread((thread_fnc)work_task, (void*)&tdata[j], j);
-    wait_threads_finish(threads, nb_threads);
+    wait_threads_finish(threads, (int)nb_threads);
 
     for (int j = 0; j < nb_threads; ++j)
       {
@@ -175,7 +175,7 @@ int vegas::pintegrate(vegas_integrand f, void * params, double xl[], double xu[]
 	for (unsigned int d = 0; d < dim; ++d)
 	  {
 	    for (int k = 0; k < tdata[j].x.size(); ++k) {
-	      int idx = d * s->bins + tdata[j].x[k].val(d);
+	      int idx = (int)(d * s->bins + tdata[j].x[k].val(d));
 	      s->hist[idx] += tdata[j].t_hist[idx];
 	    }
 	  }
@@ -280,7 +280,7 @@ void vegas::accumulate(double y) {
 
 // clear the histogram and reset the starting point in the domain
 void vegas::clear() {
-  for (unsigned int i = 0, mx = s->bins * dim; i < mx; ++i) {
+  for (size_t i = 0, mx = s->bins * dim; i < mx; ++i) {
     s->hist[i] = 0;
     if (i < dim) s->xid[i] = 0;
   }
@@ -296,7 +296,7 @@ void vegas::resize_grid() {
 }
 
 bool vegas::adjust() {
-  for (int j = dim - 1; j >= 0; --j) {
+  for (size_t j = dim - 1; j >= 0; --j) {
     s->xid[j] = (s->xid[j] + 1) % s->bins;
     if (s->xid[j] != 0) return true;
   }
@@ -334,7 +334,7 @@ double vegas::smooth() {
   */
   // direct sum, no smoothing  
   double sum = 0;
-  for (unsigned int i = 0, mx = dim * s->bins; i < mx; ++i) {
+  for (size_t i = 0, mx = dim * s->bins; i < mx; ++i) {
     sum += s->hist[i];
   }
   return sum;
@@ -380,6 +380,7 @@ void vegas::tracegrid() {
 
 void vegas::dbg_grid(int iter) {
   char fname[256]; std::sprintf(fname, "grid_%d.txt", iter);
+
   std::ofstream outfile(fname, std::ofstream::binary);
 
   for (unsigned int b = 0; b <= s->bins; ++b) {
@@ -406,7 +407,7 @@ namespace Math {
       v.set_evals(16);
     
       do { v.integrate(f, params, xl, xu, res, abserr); }
-      while (fabsf(v.chi_sq() - 1) > 0.5);    
+      while (fabsf((float)(v.chi_sq() - 1)) > 0.5f);    
     }
   
     void Vegasp(vegas_integrand f,
@@ -423,7 +424,7 @@ namespace Math {
       v.set_evals(16);
     
       do { v.pintegrate(f, params, xl, xu, res, abserr); }
-      while (fabsf(v.chi_sq() - 1) > 0.5);    
+      while (fabsf((float)(v.chi_sq() - 1)) > 0.5f);    
     }
   }
 }

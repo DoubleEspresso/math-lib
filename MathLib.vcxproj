@@ -161,22 +161,25 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="matrix.cpp" />
-    <ClCompile Include="matrix_ge.cpp" />
-    <ClCompile Include="matrix_lu.cpp" />
-    <ClCompile Include="matrix_qr.cpp" />
-    <ClCompile Include="vector.cpp" />
     <ClCompile Include="vegas.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="complex.h" />
     <ClInclude Include="constants.h" />
     <ClInclude Include="error.cuh" />
+    <ClInclude Include="export.h" />
+    <ClInclude Include="matrix.cuh" />
     <ClInclude Include="matrix.h" />
+    <ClInclude Include="matrix.hpp" />
+    <ClInclude Include="matrix_ge.hpp" />
+    <ClInclude Include="matrix_lu.hpp" />
+    <ClInclude Include="matrix_qr.hpp" />
     <ClInclude Include="matrix_utils.h" />
     <ClInclude Include="rand.h" />
     <ClInclude Include="threads.h" />
+    <ClInclude Include="vector.cuh" />
     <ClInclude Include="vector.h" />
+    <ClInclude Include="vector.hpp" />
     <ClInclude Include="vector_utils.h" />
     <ClInclude Include="vegas.h" />
   </ItemGroup>
