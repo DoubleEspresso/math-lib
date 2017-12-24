@@ -172,6 +172,20 @@ void EXPORT ge_cpu_tri(double * a, double * b, const int N) {
   Math::Matrix::ge_cpu_tri<double>(a, b, N);
 }
 
+/*Conjugate Gradient Methods*/
+void EXPORT cgd_cpu(const char * A, char * X, char * B, const int N) {
+  Math::Matrix::CGD<char>(A, X, B, N);
+}
+void EXPORT cgd_cpu(const int * A, int * X, int * B, const int N) {
+  Math::Matrix::CGD<int>(A, X, B, N);
+}
+void EXPORT cgd_cpu(const float * A, float * X, float * B, const int N) {
+  Math::Matrix::CGD<float>(A, X, B, N);
+}
+void EXPORT cgd_cpu(const double * A, double * X, double * B, const int N) {
+  Math::Matrix::CGD<double>(A, X, B, N);
+}
+
 /*Integration*/
 void EXPORT vegas_cpu(vegas_integrand f, void * params, double xl[], double xu[], size_t dim, size_t icalls, double * res, double * abserr) {
   Math::Integrate::Vegas(f, params, xl, xu, dim, icalls, res, abserr);

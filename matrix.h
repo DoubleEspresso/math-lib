@@ -39,6 +39,14 @@ namespace Math {
     /*Gaussian elimination*/
     template<typename T> void ge_cpu(T * a, T * b, const int N);
     template<typename T> void ge_cpu_tri(T * a, T * b, const int N);
+    
+    //--------------------------------------------------------------------------------
+    // Conjugate gradient descent implementation(s)
+    //  - naive CGD (nxn, symmetric, positive-definite matrices) (no preconditioning)
+    //  - bi-CG stabilized (nxn, non-symmetric, positive-definite matrices) (no preconditioning)
+    //--------------------------------------------------------------------------------    
+    template<typename T> void CGD(const T * A, T * X, T * B, const int N);
+    template<typename T> void BiCGStab(const T * A, T * X, T * B, const int N);
   };
 };
 
@@ -46,5 +54,6 @@ namespace Math {
 #include "matrix_lu.hpp"
 #include "matrix_qr.hpp"
 #include "matrix_ge.hpp"
+#include "matrix_cgd.hpp"
 
 #endif

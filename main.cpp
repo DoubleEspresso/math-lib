@@ -6,6 +6,7 @@
 #include "threads.h"
 #include "rand.h"
 #include "complex.h"
+#include "clock.h"
 
 #define K(x) -M_PI + 2.0*M_PI*x
 
@@ -15,6 +16,7 @@ void test_qr();
 void test_ge();
 void test_vegas();
 void test_dot();
+void test_cgd(int N);
 
 int main(int argc, char ** argv) {
   test_mm();
@@ -23,6 +25,7 @@ int main(int argc, char ** argv) {
   test_ge();
   test_vegas();
   test_dot();
+  test_cgd(100);
   return 0;
 }
 
@@ -33,6 +36,51 @@ double z3(double * x, void * p) {
   for (int j = 0; j < 4; ++j) den += sin(K(x[j]) / 2)*sin(K(x[j]) / 2);
   double A = sin(K(x[0]) / 2) * sin(K(x[0]) / 2) * sin(K(x[1]) / 2) * sin(K(x[1]) / 2);
   return A / den;
+}
+
+void test_cgd(int N) { 
+  MT19937<double> rand(0.01, 1);
+  int NN = N * N;
+  // make a symmetric (positive definite), NxN matrix A
+  // and a random matrix X, to compute B
+  double * A = new double[NN]; memset(A, 0, NN * sizeof(double));
+  double * X = new double[N]; memset(X, 0, N * sizeof(double));
+  double * X0 = new double[N]; memset(X0, 0, N * sizeof(double));
+  double * B = new double[N]; memset(B, 0, N * sizeof(double));
+  double * Br = new double[N]; memset(Br, 0, N * sizeof(double));
+
+  for (int r=0; r<N; ++r) {
+    for (int c=0; c<=r; ++c) {
+      int i1 = r * N + c;
+      int i2 = c * N + r;
+      A[i1] = rand.next();
+      A[i2] = A[i1];
+    }
+  }
+  for (int j=0; j<N; ++j) { A[j*N+j] = rand.next(); X[j] = rand.next(); }
+
+  mm_cpup(A, X, B, N, N, 1); // compute B
+
+  // find the solution Ax = b 
+  // using a gradient descent method
+  Clock c("cgd_naive");
+  cgd_cpu(A, X0, B, N);
+  c.finished();
+
+  mm_cpup(A, X0, Br, N, N, 1); // compute B
+  
+  int nerr = 0; double tol = 1e-3;
+  for (int j=0; j<N; ++j) {
+    if(fabs(B[j]-Br[j]) > tol) ++nerr;
+  }
+  printf(".d.cgd(%dx%d) finished with %d-errors\n", N, N, nerr);
+  
+  // cleanup
+  if (A) { delete[] A; A = 0; }
+  if (X) { delete[] X; X = 0; }
+  if (X0) { delete[] X0; X0 = 0; }
+  if (B) { delete[] B; B = 0; }
+  if (Br) { delete[] Br; Br = 0; }
 }
 
 void test_dot() {
