@@ -8,18 +8,19 @@ USERMACROS = -DNDEBUG -DTHREADED
 INC = . /usr/local/cuda/include
 CFLAGS = $(foreach id,$(INC),-I$(id))
 CFLAGS += -Wall -O3 -fomit-frame-pointer -fstrict-aliasing -ffast-math -std=gnu++11 -pthread
-CUFLAGS = -std=c++11 -c -arch=sm_20
+CUFLAGS = -D_FORCE_INLINES -std=c++11 -c -arch=sm_20
 DFLAGS =
 LFLAGS = -lpthread -lrt -L/usr/local/cuda/lib64/stubs -lcuda -L/usr/local/cuda/lib64 -lcudart
 
-CUDA_ARCH :=	-gencode arch=compute_30,code=sm_30 \
-                -gencode arch=compute_35,code=sm_35 \
-                -gencode arch=compute_50,code=sm_50 \
-                -gencode arch=compute_52,code=sm_52 \
-		-gencode arch=compute_60,code=sm_60
+CUDA_ARCH :=	-arch=sm_20 #-gencode arch=compute_20,code=sm_20 \
+		#-gencode arch=compute_30,code=sm_30 \
+                #-gencode arch=compute_35,code=sm_35 \
+                #-gencode arch=compute_50,code=sm_50 \
+                #-gencode arch=compute_52,code=sm_52 
+		#-gencode arch=compute_60,code=sm_60
 
-NVFLAGS := -O3 -rdc=true #rdc needed for separable compilation
-NVFLAGS += $(CUDA_ARCH)
+NVFLAGS := -O3 -rdc=true -std=c++11 #rdc needed for separable compilation
+NVFLAGS += -D_FORCE_INLINES -c $(CUDA_ARCH)
 NVFLAGS += $(foreach id,$(INC),-I$(id))
 INSTALL = /usr/local/bin
 
@@ -117,7 +118,7 @@ information:
 #	$(CC) -fPIC $(CFLAGS) $(USERMACROS) $< -o $@
 
 link: $(OBJ)
-	$(NVCC) -o $(EXE) $(SRC) $(OBJ) $(LFLAGS)
+	$(NVCC) -o $(EXE) $(LFLAGS) -std=c++11 $(SRC) $(OBJ)
 
 install: all
 	if [ ! -d $(INSTALL) ]; then \

@@ -56,7 +56,7 @@ namespace Math
     void dot_cpup(const T * a, const T * b, T * c, const int dim) {
       int nb_threads = 4;  // todo.
       THREAD_HANDLE * threads = new THREAD_HANDLE[nb_threads];
-      std::vector<vd_tdata<T>> tdata;
+      std::vector< vd_tdata<T> > tdata;
       (*c) = 0;
     
 #ifdef _WIN32
